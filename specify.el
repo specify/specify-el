@@ -30,7 +30,7 @@
            (specify/parse-headers (cons (cons key value) headers))))
 
         (t (error "bad http header: %s"
-                    (buffer-substring (point) (line-end-position))))))
+                  (buffer-substring (point) (line-end-position))))))
 
 (defun specify/get (url)
   (let ((buffer (url-retrieve-synchronously url)))
@@ -40,19 +40,38 @@
             (goto-char (point-min))
             (list (specify/parse-status-line)
                   (specify/parse-headers)
-                  (json-read)))
+                  (let ((json-object-type 'hash-table)) (json-read))))
         (kill-buffer buffer)))))
 
+(defvar specify/server-hist nil)
+
 (defun specify (host)
-  (interactive (list (read-string "Specify server:")))
-  (with-current-buffer
-      (url-retrieve-synchronously (contcat "http://" host "/"))))
+  (interactive (list (read-string "Specify server: " nil 'specify/server-hist)))
+  (apply 'specify/login (specify/get (concat "http://" host "/context/login/"))))
 
-(defun specify-login (httpc headers data)
-  (with-current-buffer (get-buffer-create "specify-test")
-    (goto-char (point-max))
-    (insert data)))
+(defvar specify/username-hist nil)
+(defvar specify/collection-hist nil)
 
-;;(specify/get "http://dhwd99p1.nhm.ku.edu:8000/context/login/")
+(defun specify/login (status headers data)
+  (puthash "username"
+           (read-from-minibuffer "Username: "
+                                 nil nil nil
+                                 'specify/username-hist)
+           data)
+  (puthash "password" (read-passwd "Password: ") data)
+
+  (let ((collections (gethash "collections" data))
+        (completion-ignore-case t))
+    (puthash "collection"
+             (gethash (completing-read "Collection: "
+                                collections
+                                nil t nil
+                                'specify/collection-hist)
+                      collections)
+             data))
+
+  (message "login: %s" (json-encode data)))
+
+;;(specify/get "http://127.0.0.1:8000/context/login/")
 
 (provide 'specify)
